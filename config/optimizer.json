@@ -1,0 +1,80 @@
+{
+    "nelder-mead": {
+        "jac": null,
+        "options": {
+            "xatol": 1e-08,
+            "fatol": 1e-08,
+            "disp": true
+        }
+    },
+    "Powell": {
+        "jac": null,
+        "options": {
+            "xtol": 1e-08,
+            "ftol": 1e-08,
+            "disp": true
+        }
+    },
+    "L-BFGS-B": {
+        "jac": "3-point",
+        "options": {
+            "maxcor": 10,
+            "eps": 0.001,
+            "disp": true,
+            "finite_diff_rel_step": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+            ]
+        }
+    },
+    "SLSQP": {
+        "jac": "3-point",
+        "options": {
+            "ftol": 1e-08,
+            "eps": 0.001,
+            "disp": true,
+            "finite_diff_rel_step": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+            ]
+        }
+    },
+    "BFGS": {
+        "jac": "3-point",
+        "options": {
+            "eps": 0.001,
+            "disp": true,
+            "finite_diff_rel_step": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+            ]
+        }
+    },
+    "CG": {
+        "jac": "3-point",
+        "options": {
+            "eps": 0.001,
+            "disp": true,
+            "finite_diff_rel_step": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+            ]
+        }
+    }
+}
