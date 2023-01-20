@@ -1,7 +1,7 @@
 # L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras
-[[Arxiv]](https://arxiv.org/abs/2207.01009v1) [[Paper]](https://arxiv.org/pdf/2207.01009v1)
+[[Arxiv]](https://arxiv.org/abs/2207.01009) [[Paper]](https://arxiv.org/pdf/2207.01009)
 
-L2E, or Lasers to Events, is a calibration process for event cameras and lidar via mutual information maximization. 
+This repository contains the official code for the ICRA 2023 paper [L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras](https://arxiv.org/pdf/2207.01009), a calibration process for event cameras and lidar via mutual information maximization. 
 
 **Uncalibrated Result**
 
@@ -85,7 +85,7 @@ You can use `--help` to get the doc string information regarding the optimizatio
 
 ## Citation
 
-```
+```bibtex
 @article{kevinta2022:l2e,
   title = {L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras},
   author = {Ta, Kevin and Bruggemann, David and Brödermann, Tim and Sakaridis, Christos and Van Gool, Luc},
