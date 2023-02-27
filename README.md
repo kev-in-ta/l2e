@@ -86,11 +86,11 @@ You can use `--help` to get the doc string information regarding the optimizatio
 ## Citation
 
 ```bibtex
-@article{kevinta2022:l2e,
+@inproceedings{kevinta2022:l2e,
   title = {L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras},
   author = {Ta, Kevin and Bruggemann, David and Brödermann, Tim and Sakaridis, Christos and Van Gool, Luc},
-  journal = {arXiv preprint arXiv:2207.01009},
-  year = {2022}
+  booktitle = {International Conference on Robotics and Automation (ICRA)}
+  year = {2023}
 }
 ```
 
