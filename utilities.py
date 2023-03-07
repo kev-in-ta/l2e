@@ -1,15 +1,14 @@
-import numpy as np
-import cv2
-
-import tqdm
-
 from typing import Tuple
-from scipy.stats import gaussian_kde
+
+import cv2
+import numpy as np
+import tqdm
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
+from scipy.stats import gaussian_kde
 
 
 def get_mi(
-    T: np.array,
+    tf_l2c: np.ndarray,
     K: np.ndarray,
     data: dict,
     axis: bool = True,
@@ -17,7 +16,7 @@ def get_mi(
     """Get MI score given images and pointclouds.
 
     Args:
-        T: (6,) translations and rotation angles (ZYX)
+        tf_l2c: (6,) translations and rotation angles (ZYX)
         K: (3,3) matrix containing the projection
         data: dictionary of dicts with image and point cloud info
         axis: flag to use axis-angle representation
@@ -34,15 +33,14 @@ def get_mi(
 
     # get homogenous transformation matrix
     if axis:
-        H = param2hmatRodrigues(*T)
+        H = param2hmatRodrigues(*tf_l2c)
     else:
-        H = param2hmat(*T)
-        
+        H = param2hmat(*tf_l2c)
+
     pbar = tqdm.tqdm(total=len(data))
 
     # loop through each scene in the dictionary
     for scene in data:
-
         # project points into image
         projected_points, tf_pc_int = points2image(
             data[scene]["pc_xyz"], data[scene]["pc_int"], K, H
@@ -64,7 +62,7 @@ def get_mi(
         total_y = total_y + hy
         total_xy = total_xy + hxy
         total_n += n
-        
+
         pbar.update(1)
 
     if total_n > 0:
@@ -73,13 +71,13 @@ def get_mi(
         score = -calc_mi(p_x, p_y, p_xy)  # return the negative of MI for optimization
     else:
         score = 0
-    
-    print(f'MI Score: {score:.6f}')
+
+    print(f"MI Score: {score:.6f}")
 
     return score
 
 
-def euler2mat(a: float = 0, b: float = 0, g: float = 0) -> np.ndarray:
+def euler2mat(a: np.float64 = 0, b: np.float64 = 0, g: np.float64 = 0) -> np.ndarray:
     """Convert zyx Euler angles to 3x3 rotation matrix.
 
     Args:
@@ -110,7 +108,7 @@ def euler2mat(a: float = 0, b: float = 0, g: float = 0) -> np.ndarray:
     return R
 
 
-def mat2euler(R: np.ndarray) -> np.array:
+def mat2euler(R: np.ndarray) -> np.ndarray:
     """Convert 3x3 rotation matrix to ZYX Euler angles.
 
     Args:
@@ -133,7 +131,12 @@ def mat2euler(R: np.ndarray) -> np.array:
 
 
 def param2hmat(
-    x: float = 0, y: float = 0, z: float = 0, a: float = 0, b: float = 0, g: float = 0
+    x: np.float64 = 0,
+    y: np.float64 = 0,
+    z: np.float64 = 0,
+    a: np.float64 = 0,
+    b: np.float64 = 0,
+    g: np.float64 = 0,
 ) -> np.ndarray:
     """Convert xyz translation and zyx Euler angles to 4x4 homogenous matrix.
 
@@ -160,12 +163,12 @@ def param2hmat(
 
 
 def param2hmatRodrigues(
-    x: float = 0,
-    y: float = 0,
-    z: float = 0,
-    r1: float = 0,
-    r2: float = 0,
-    r3: float = 0,
+    x: np.float64 = 0,
+    y: np.float64 = 0,
+    z: np.float64 = 0,
+    r1: np.float64 = 0,
+    r2: np.float64 = 0,
+    r3: np.float64 = 0,
 ) -> np.ndarray:
     """Convert xyz translation and zyx Euler angles to 4x4 homogenous matrix.
 
@@ -193,7 +196,7 @@ def param2hmatRodrigues(
 
 def hmat2param(
     H: np.ndarray,
-) -> np.array:
+) -> np.ndarray:
     """Convert xyz translation and zyx Euler angles to 4x4 homogenous matrix.
 
     Args:
@@ -216,7 +219,9 @@ def hmat2param(
     return P
 
 
-def points2image(pc_xyz: np.ndarray, pc_int: np.array, K: np.ndarray, H: np.ndarray) -> np.ndarray:
+def points2image(
+    pc_xyz: np.ndarray, pc_int: np.ndarray, K: np.ndarray, H: np.ndarray
+) -> np.ndarray:
     """Project 3D points into 2D image space.
 
     Args:
@@ -241,14 +246,16 @@ def points2image(pc_xyz: np.ndarray, pc_int: np.array, K: np.ndarray, H: np.ndar
     tf_pc_int = pc_int[forward_mask]
 
     # scale by z-depth for projective geometry
-    tf_pc_xy = tf_pc_filt[0:3, :] / np.repeat(tf_pc_filt[2, :].reshape(1, -1), 3, axis=0)
+    tf_pc_xy = tf_pc_filt[0:3, :] / np.repeat(
+        tf_pc_filt[2, :].reshape(1, -1), 3, axis=0
+    )
 
     # project and return
     return K @ tf_pc_xy, tf_pc_int
 
 
 def points2imageCV(
-    pc_xyz: np.ndarray, pc_int: np.array, K: np.ndarray, D: np.ndarray, H: np.ndarray
+    pc_xyz: np.ndarray, pc_int: np.ndarray, K: np.ndarray, D: np.ndarray, H: np.ndarray
 ) -> np.ndarray:
     """Project 3D points into 2D image space.
 
@@ -275,7 +282,9 @@ def points2imageCV(
     tf_pc_int = pc_int[forward_mask]
 
     # scale by z-depth for projective geometry
-    tf_pc_xy, _ = cv2.projectPoints(tf_pc_filt[0:3, :], np.eye(3), np.zeros((3, 1)), K, D)
+    tf_pc_xy, _ = cv2.projectPoints(
+        tf_pc_filt[0:3, :], np.eye(3), np.zeros((3, 1)), K, D
+    )
 
     # project and return
     return tf_pc_xy.reshape(-1, 2).T, tf_pc_int
@@ -284,12 +293,12 @@ def points2imageCV(
 def calc_joint_hist(
     image: np.ndarray,
     pc_xy: np.ndarray,
-    pc_int: np.array,
-    x_min: int,
-    x_max: int,
-    y_min: int,
-    y_max: int,
-) -> Tuple[np.array, np.array, np.ndarray, int]:
+    pc_int: np.ndarray,
+    x_min: np.int64,
+    x_max: np.int64,
+    y_min: np.int64,
+    y_max: np.int64,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """Generate joint histogram.
 
     Args:
@@ -307,8 +316,6 @@ def calc_joint_hist(
         h_xy: (256,256,) count in joint histogram
         n: total number of points
     """
-
-    h, w = image.shape
 
     roi_mask = (
         (pc_xy[1, :] < y_max)
@@ -331,7 +338,9 @@ def calc_joint_hist(
     return h_x, h_y, h_xy, n
 
 
-def calc_mi(c_x: np.array, c_y: np.array, c_xy: np.ndarray, n: int = 1) -> float:
+def calc_mi(
+    c_x: np.ndarray, c_y: np.ndarray, c_xy: np.ndarray, n: np.int64 = 1
+) -> np.float64:
     """Calculate mutual information criteria.
 
     Args:
@@ -348,7 +357,6 @@ def calc_mi(c_x: np.array, c_y: np.array, c_xy: np.ndarray, n: int = 1) -> float
         return 0
 
     else:
-
         p_x = c_x / n
         p_y = c_y / n
         p_xy = c_xy / n
@@ -361,10 +369,10 @@ def calc_mi(c_x: np.array, c_y: np.array, c_xy: np.ndarray, n: int = 1) -> float
 
 
 def get_kde_true(
-    h_x: np.array,
-    h_y: np.array,
-    h_xy: np.array,
-) -> Tuple[np.array, np.array, np.ndarray]:
+    h_x: np.ndarray,
+    h_y: np.ndarray,
+    h_xy: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Get Gaussian kernel density estimate entirely.
 
     Args:
@@ -380,15 +388,15 @@ def get_kde_true(
 
     # get reconstructed point observations
     total_x_data = []
-    for i, num in enumerate(total_x):
+    for i, num in enumerate(h_x):
         total_x_data += [i] * int(num)
 
     total_y_data = []
-    for i, num in enumerate(total_y):
+    for i, num in enumerate(h_y):
         total_y_data += [i] * int(num)
 
     total_xy_data = []
-    for i, y_data in enumerate(total_xy):
+    for i, y_data in enumerate(h_xy):
         for j, num in enumerate(y_data):
             total_xy_data += [(i, j)] * int(num)
     total_xy_data = np.array(total_xy_data).T
@@ -414,10 +422,10 @@ def get_kde_true(
 
 
 def get_kde_convolve(
-    h_x: np.array,
-    h_y: np.array,
-    h_xy: np.array,
-) -> Tuple[np.array, np.array, np.ndarray]:
+    h_x: np.ndarray,
+    h_y: np.ndarray,
+    h_xy: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Get Gaussian kernel density estimate through convolution.
 
     Args:
@@ -450,8 +458,8 @@ def get_kde_convolve(
         p_y = gaussian_filter1d(h_y / total_n, bw_y, mode="constant", cval=0.0)
 
         p_xy = gaussian_filter(h_xy / total_n, bw_xy, mode="constant", cval=0.0)
-    except ValueError as e:
-        print(e)
+    except ValueError as err:
+        print(err)
         p_x = np.zeros(256)
         p_y = np.zeros(256)
         p_xy = np.zeros((256, 256))

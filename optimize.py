@@ -1,17 +1,16 @@
+import datetime
 import json
-import datetime, time
 import pathlib
-
-import numpy as np
-import cv2
-
-from typing import Tuple
+import time
 from pathlib import Path
-from scipy.optimize import minimize, Bounds
+from typing import Tuple
 
-from utilities import *
-
+import cv2
 import fire
+import numpy as np
+from scipy.optimize import Bounds, minimize
+
+from utilities import get_mi
 
 
 def calibrate(
@@ -56,13 +55,14 @@ def calibrate(
         output_path.mkdir()
 
     # load configuration
-    K, D, T = load_intrinsics(config_path / "config.json", key, axis)
-    optim = json.load(open(config_path / "optimizer.json", "r"))
+    K, D, tf_l2c = load_intrinsics(config_path / "config.json", key, axis)
+    with open(config_path / "optimizer.json", "r", encoding="utf-8") as file_io:
+        optim = json.load(file_io)
 
     # add bounds to optimixation
     if bounded and optimizer in ["nelder-mead", "Powell", "L-BFGS-B", "SLSQP"]:
         bound_error = np.array([disp_bounds] * 3 + [np.deg2rad(deg_bounds)] * 3)
-        bounds = Bounds(T - bound_error, T + bound_error)
+        bounds = Bounds(tf_l2c - bound_error, tf_l2c + bound_error)
     else:
         bound_error = None
 
@@ -70,14 +70,14 @@ def calibrate(
     data = load_data(image_path, lidar_path, K, D, image_blur)
 
     print(f"Optimizing for {len(data)} scenes.")
-    
-    initial_MI = get_mi(T, K, data, axis)
+
+    initial_mi = get_mi(tf_l2c, K, data, axis)
 
     # run optimizer
     start = time.time()
     res = minimize(
         get_mi,
-        T,
+        tf_l2c,
         (K, data, axis),
         method=optimizer,
         jac=optim[optimizer]["jac"],
@@ -88,7 +88,7 @@ def calibrate(
 
     # print optimizer results
     print(f"Time Elapsed: {end-start}s")
-    print(f"Initial function value: {initial_MI:10.6f}")
+    print(f"Initial function value: {initial_mi:10.6f}")
     print(f"Optimal function value: {res.fun: 10.6f}")
     x, y, z, a, b, g = res.x
     print(f"X Translation: {x:8.4f} m")
@@ -111,7 +111,7 @@ def calibrate(
     res_dict["fun"] = res.fun
     res_dict["smoothing"] = image_blur
     res_dict["x"] = res.x.tolist()
-    res_dict["seed"] = T.tolist()
+    res_dict["seed"] = tf_l2c.tolist()
     res_dict["bounded"] = bound_error.tolist()
     res_dict["time"] = end - start
     res_dict["scenes"] = list(data.keys())
@@ -121,21 +121,23 @@ def calibrate(
     else:
         res_dict["representation"] = "euler"
 
-    json.dump(
-        res_dict,
-        open(
-            output_path / f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_{key}.json',
-            "w",
-        ),
-        indent=4,
+    output_file = (
+        output_path / f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_{key}.json'
     )
+
+    with open(
+        output_file,
+        "w",
+        encoding="utf-8",
+    ) as file_io:
+        json.dump(res_dict, file_io, indent=4)
 
 
 def load_data(
     image_folder: pathlib.Path,
     lidar_folder: pathlib.Path,
     K: np.ndarray,
-    D: np.array,
+    D: np.ndarray,
     image_blur: float,
 ) -> dict:
     """Load scene data into a dictionary for easy access.
@@ -162,7 +164,6 @@ def load_data(
 
     # add images and point cloud to scene dictionary
     for scene in matched_scenes:
-
         image_path = image_folder / f"{scene}.png"
         point_cloud = lidar_folder / f"{scene}.txt"
 
@@ -199,7 +200,7 @@ def load_intrinsics(
     intrinsic_file: pathlib.Path,
     frame: str = "cam",
     axis: bool = False,
-) -> Tuple[np.ndarray, np.array, np.array]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load intrinsic calibration values and seed extrinsics.
 
     Args:
@@ -213,7 +214,8 @@ def load_intrinsics(
     """
 
     # load intrinsic parameters and seed extrinsics
-    config = json.load(open(intrinsic_file, "r"))
+    with open(intrinsic_file, "r", encoding="utf-8") as file_io:
+        config = json.load(file_io)
 
     K = np.array(config[frame]["K"])
     D = np.array(config[frame]["D"])
