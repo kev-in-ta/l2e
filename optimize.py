@@ -11,7 +11,7 @@ import fire
 import numpy as np
 from scipy.optimize import Bounds, minimize
 
-from utilities import PairedScene, PointCloud, get_mi
+from utilities import PairedScene, PointCloud, get_mutual_information
 
 
 def calibrate(
@@ -25,6 +25,7 @@ def calibrate(
     image_blur: float = 5,
     key: str = "cam",
     use_axis_representation: bool = True,
+    calibrate_rotation_only: bool = False,
 ) -> None:
     """Extrinsically calibrate camera to LiDAR via mutual information maximization.
 
@@ -39,6 +40,7 @@ def calibrate(
         image_blur: gaussian blurring std on image to smooth optimization
         key: key for the intrinsic calibration in config.json
         use_axis_representation: flag to use rotation vector over Euler angles
+        calibrate_rotation_only: flag to calibrate rotation only
     """
     # convert paths
     image_path = Path(image_dir)
@@ -61,10 +63,18 @@ def calibrate(
     with open(config_path / "optimizer.json", "r", encoding="utf-8") as file_io:
         optim = json.load(file_io)
 
+    # set optimization targets
+    if calibrate_rotation_only:
+        target = tf_l2c[3:]
+        optimization_mask = np.arange(3, 6)
+    else:
+        target = tf_l2c
+        optimization_mask = np.arange(0, 6)
+
     # add bounds to optimixation
     if bounded and optimizer in ["nelder-mead", "Powell", "L-BFGS-B", "SLSQP"]:
-        bound_error = np.array([disp_bounds] * 3 + [np.deg2rad(deg_bounds)] * 3)
-        bounds = Bounds(tf_l2c - bound_error, tf_l2c + bound_error)
+        bound_error = np.array([disp_bounds] * 3 + [np.deg2rad(deg_bounds)] * 3)[optimization_mask]
+        bounds = Bounds(target - bound_error, target + bound_error)
     else:
         bound_error = None
 
@@ -73,14 +83,14 @@ def calibrate(
 
     print(f"Optimizing for {len(data)} scenes.")
 
-    initial_mi = get_mi(tf_l2c, camera_matrix, data, use_axis_representation)
+    initial_mi = get_mutual_information(target, optimization_mask, tf_l2c, camera_matrix, data, use_axis_representation)
 
     # run optimizer
     start = time.time()
     res = minimize(
-        get_mi,
-        tf_l2c,
-        (camera_matrix, data, use_axis_representation),
+        get_mutual_information,
+        target,
+        (optimization_mask, tf_l2c, camera_matrix, data, use_axis_representation),
         method=optimizer,
         jac=optim[optimizer]["jac"],
         bounds=bounds,
@@ -88,11 +98,14 @@ def calibrate(
     )
     end = time.time()
 
+    output = tf_l2c
+    output[optimization_mask] = res.x
+    t_x, t_y, t_z, r_1, r_2, r_3 = output.tolist()
+
     # print optimizer results
     print(f"Time Elapsed: {end-start}s")
     print(f"Initial function value: {initial_mi:10.6f}")
     print(f"Optimal function value: {res.fun: 10.6f}")
-    t_x, t_y, t_z, r_1, r_2, r_3 = res.x
     print(f"X Translation: {t_x:8.4f} m")
     print(f"Y Translation: {t_y:8.4f} m")
     print(f"Z Translation: {t_z:8.4f} m")
@@ -192,28 +205,30 @@ def load_data(
 def load_intrinsics(
     intrinsic_file: pathlib.Path,
     frame: str = "cam",
-    axis: bool = False,
+    use_axis_representation: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load intrinsic calibration values and seed extrinsics.
 
     Args:
         intrinsic_file: path to configuration json
         frame: dictionary key to calibration intrinsics
+        use_axis_representation: flag to use angle-axis representation
 
     Returns:
-        K: (3,3) matrix containing the projection
-        D: (5,) array containing distortion parameters
-        T: (6,) translations and rotation angles (ZYX)
+        camera_matrix: (3,3) matrix containing the projection
+        distortion_params: (5,) array containing distortion parameters
+        tf_vector: (6,) translations and rotation parameters as vector
     """
 
     # load intrinsic parameters and seed extrinsics
     with open(intrinsic_file, "r", encoding="utf-8") as file_io:
         config = json.load(file_io)
 
-    K = np.array(config[frame]["K"])
-    D = np.array(config[frame]["D"])
-    if axis:
-        T = np.array(
+    camera_matrix = np.array(config[frame]["K"])
+    distortion_params = np.array(config[frame]["D"])
+
+    if use_axis_representation:
+        tf_vector = np.array(
             [
                 config[frame]["x"],
                 config[frame]["y"],
@@ -222,7 +237,7 @@ def load_intrinsics(
             + config[frame]["Rodrigues"]
         )
     else:
-        T = np.array(
+        tf_vector = np.array(
             [
                 config[frame]["x"],
                 config[frame]["y"],
@@ -233,7 +248,7 @@ def load_intrinsics(
             ]
         )
 
-    return K, D, T
+    return camera_matrix, distortion_params, tf_vector
 
 
 if __name__ == "__main__":

@@ -29,7 +29,9 @@ class PairedScene:
     y_max: int
 
 
-def get_mi(
+def get_mutual_information(
+    target: np.ndarray,
+    optimization_mask: np.ndarray,
     tf_l2c: np.ndarray,
     camera_matrix: np.ndarray,
     data: Dict[str, PairedScene],
@@ -38,7 +40,9 @@ def get_mi(
     """Get MI score given images and pointclouds.
 
     Args:
-        tf_l2c: (6,) translations and rotation angles (ZYX / Rodrigues)
+        target: the parameters for optimization
+        optimization_mask: the associated indices for the optimization targets
+        tf_l2c: (6,) original translations and rotation angles (ZYX / Rodrigues)
         camera_matrix: (3,3) matrix containing the projection
         data: dict of paired scene data with image and point cloud info
         axis: flag to use axis-angle representation
@@ -46,6 +50,8 @@ def get_mi(
     Returns:
         MI: mutual information criteria
     """
+
+    tf_l2c[optimization_mask] = target
 
     # initialize accumulated histogram arrays
     total_x = np.zeros(256)
@@ -90,7 +96,7 @@ def get_mi(
     if total_n > 0:
         # attempt to smooth histogram with KDE
         p_x, p_y, p_xy = get_kde_convolve(total_x, total_y, total_xy)
-        score = -calc_mi(p_x, p_y, p_xy)  # return the negative of MI for optimization
+        score = -calculate_mutual_information(p_x, p_y, p_xy)  # return the negative for minimisation
     else:
         score = 0
 
@@ -354,7 +360,9 @@ def calc_joint_hist(
     return hist_x, hist_y, hist_xy, num_valid
 
 
-def calc_mi(c_x: np.ndarray, c_y: np.ndarray, c_xy: np.ndarray, num_points: np.int64 = 1) -> np.float64:
+def calculate_mutual_information(
+    c_x: np.ndarray, c_y: np.ndarray, c_xy: np.ndarray, num_points: np.int64 = 1
+) -> np.float64:
     """Calculate mutual information criteria.
 
     Args:

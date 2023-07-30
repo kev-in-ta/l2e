@@ -80,7 +80,8 @@ Additional arguments / parameters include:
 - `--optimizer` optimizer to use in _{'nelder-mead', 'Powell', 'L-BFGS-B', 'BFGS', 'CG', 'SLSQP'}_
 - `--image_blur` gaussian blurring std on image to smooth optimization _(default 5px)_
 - `--key` key for the intrinsic calibration in `config.json` _(default cam)_
-- `--axis` flag to use rotation vector over Euler angles _(default True)_
+- `--use_axis_representation` flag to use rotation vector over Euler angles _(default True)_
+- `--calibrate_rotation_only` flag to only calibrate rotation (useful if CAD translations are trusted) _(default False)_
 
 You can use `--help` to get the doc string information regarding the optimization script. use `:q` to exit.
 
