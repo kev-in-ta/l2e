@@ -1,49 +1,49 @@
+"""Command line tool for optimising mutual information between image & point cloud"""
 import datetime
 import json
 import pathlib
 import time
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 import cv2
 import fire
 import numpy as np
 from scipy.optimize import Bounds, minimize
 
-from utilities import get_mi
+from utilities import PairedScene, PointCloud, get_mi
 
 
 def calibrate(
-    image_path: str,
-    lidar_path: str,
-    output_path: str,
+    image_dir: str,
+    lidar_dir: str,
+    output_dir: str,
     bounded: bool = True,
     disp_bounds: float = 0.2,
     deg_bounds: float = 5.0,
     optimizer: str = "SLSQP",
     image_blur: float = 5,
     key: str = "cam",
-    axis: bool = True,
+    use_axis_representation: bool = True,
 ) -> None:
     """Extrinsically calibrate camera to LiDAR via mutual information maximization.
 
     Args:
-        image_path: path to camera folder
-        lidar_path: path to lidar folder
-        output_path: path to where the results are saved
+        image_dir: path to camera folder
+        lidar_dir: path to lidar folder
+        output_dir: path to where the results are saved
         bounded: flag for optimizing with bounds on seed values
         disp_bounds: max displacement difference from seed values in m
         deg_bounds: max rotation difference from seed values in degrees
         optimizer: optimizer to use in {'nelder-mead', 'Powell', 'L-BFGS-B', 'BFGS', 'CG', 'SLSQP'}
         image_blur: gaussian blurring std on image to smooth optimization
         key: key for the intrinsic calibration in config.json
-        axis: flag to use rotation vector over Euler angles
+        use_axis_representation: flag to use rotation vector over Euler angles
     """
-
     # convert paths
-    image_path = Path(image_path)
-    lidar_path = Path(lidar_path)
-    output_path = Path(output_path)
+    image_path = Path(image_dir)
+    lidar_path = Path(lidar_dir)
+    output_path = Path(output_dir)
     config_path = Path("config")
 
     # check paths
@@ -55,7 +55,9 @@ def calibrate(
         output_path.mkdir()
 
     # load configuration
-    K, D, tf_l2c = load_intrinsics(config_path / "config.json", key, axis)
+    camera_matrix, distortion_params, tf_l2c = load_intrinsics(
+        config_path / "config.json", key, use_axis_representation
+    )
     with open(config_path / "optimizer.json", "r", encoding="utf-8") as file_io:
         optim = json.load(file_io)
 
@@ -67,18 +69,18 @@ def calibrate(
         bound_error = None
 
     # load scene data
-    data = load_data(image_path, lidar_path, K, D, image_blur)
+    data = load_data(image_path, lidar_path, camera_matrix, distortion_params, image_blur)
 
     print(f"Optimizing for {len(data)} scenes.")
 
-    initial_mi = get_mi(tf_l2c, K, data, axis)
+    initial_mi = get_mi(tf_l2c, camera_matrix, data, use_axis_representation)
 
     # run optimizer
     start = time.time()
     res = minimize(
         get_mi,
         tf_l2c,
-        (K, data, axis),
+        (camera_matrix, data, use_axis_representation),
         method=optimizer,
         jac=optim[optimizer]["jac"],
         bounds=bounds,
@@ -90,21 +92,21 @@ def calibrate(
     print(f"Time Elapsed: {end-start}s")
     print(f"Initial function value: {initial_mi:10.6f}")
     print(f"Optimal function value: {res.fun: 10.6f}")
-    x, y, z, a, b, g = res.x
-    print(f"X Translation: {x:8.4f} m")
-    print(f"Y Translation: {y:8.4f} m")
-    print(f"Z Translation: {z:8.4f} m")
-    if axis:
-        print(f"X Rotation: {a:11.4f} rad")
-        print(f"Y Rotation: {b:11.4f} rad")
-        print(f"Z Rotation: {g:11.4f} rad")
+    t_x, t_y, t_z, r_1, r_2, r_3 = res.x
+    print(f"X Translation: {t_x:8.4f} m")
+    print(f"Y Translation: {t_y:8.4f} m")
+    print(f"Z Translation: {t_z:8.4f} m")
+    if use_axis_representation:
+        print(f"X Rotation: {r_1:11.4f} rad")
+        print(f"Y Rotation: {r_2:11.4f} rad")
+        print(f"Z Rotation: {r_3:11.4f} rad")
     else:
-        print(f"Z Rotation: {np.rad2deg(a):11.4f} degrees")
-        print(f"Y Rotation: {np.rad2deg(b):11.4f} degrees")
-        print(f"X Rotation: {np.rad2deg(g):11.4f} degrees")
+        print(f"Z Rotation: {np.rad2deg(r_1):11.4f} degrees")
+        print(f"Y Rotation: {np.rad2deg(r_2):11.4f} degrees")
+        print(f"X Rotation: {np.rad2deg(r_3):11.4f} degrees")
 
     # save results
-    res_dict = {}
+    res_dict: Dict[str, Any] = {}
     res_dict["method"] = optimizer
     res_dict["jac"] = optim[optimizer]["jac"]
     res_dict["options"] = optim[optimizer]["options"]
@@ -116,14 +118,12 @@ def calibrate(
     res_dict["time"] = end - start
     res_dict["scenes"] = list(data.keys())
 
-    if axis:
+    if use_axis_representation:
         res_dict["representation"] = "axis-angle"
     else:
         res_dict["representation"] = "euler"
 
-    output_file = (
-        output_path / f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_{key}.json'
-    )
+    output_file = output_path / f'{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_{key}.json'
 
     with open(
         output_file,
@@ -136,8 +136,8 @@ def calibrate(
 def load_data(
     image_folder: pathlib.Path,
     lidar_folder: pathlib.Path,
-    K: np.ndarray,
-    D: np.ndarray,
+    camera_matrix: np.ndarray,
+    distortion_params: np.ndarray,
     image_blur: float,
 ) -> dict:
     """Load scene data into a dictionary for easy access.
@@ -145,15 +145,15 @@ def load_data(
     Args:
         image_folder: path to images
         lidar_folder: path to LiDAR scans
-        K: (3,3) matrix containing the projection
-        D: (5,) array containing distortion parameters
+        camera_matrix: (3,3) matrix containing the projection
+        distortion_params: (5,) array containing distortion parameters
         image_blur: gaussian blurring std on image to smooth optimization
         raw16: flag to process raw16 Bayer images
 
     Returns:
         data: dictionary of categorized scenes with rectified images and scans.
     """
-    data = {}
+    data: Dict[str, PairedScene] = {}
 
     images = image_folder.glob("*.png")
     image_stems = [image.stem for image in images]
@@ -171,7 +171,7 @@ def load_data(
         image = cv2.imread(str(image_path), cv2.IMREAD_ANYDEPTH)
 
         # undistort image
-        rect_image = cv2.undistort(image, K, D, None, K)
+        rect_image = cv2.undistort(image, camera_matrix, distortion_params, None, camera_matrix)
 
         # slightly blur images for optimization
         rect_image = cv2.GaussianBlur(rect_image, (0, 0), image_blur)
@@ -184,14 +184,7 @@ def load_data(
         pc_int = pc[:, 3]
 
         # save into dictionary
-        data[scene] = {}
-        data[scene]["image"] = rect_image
-        data[scene]["pc_xyz"] = pc_xyz
-        data[scene]["pc_int"] = pc_int
-        data[scene]["x_min"] = 0
-        data[scene]["x_max"] = w - 1
-        data[scene]["y_min"] = 0
-        data[scene]["y_max"] = h - 1
+        data[scene] = PairedScene(rect_image, PointCloud(pc_xyz, pc_int), 0, w - 1, 0, h - 1)
 
     return data
 

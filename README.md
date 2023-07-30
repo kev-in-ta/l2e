@@ -1,7 +1,8 @@
 # L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras
-[[Arxiv]](https://arxiv.org/abs/2207.01009) [[Paper]](https://arxiv.org/pdf/2207.01009)
 
-This repository contains the official code for the ICRA 2023 paper [L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras](https://arxiv.org/pdf/2207.01009), a calibration process for event cameras and lidar via mutual information maximization. 
+[[Paper]](https://ieeexplore.ieee.org/abstract/document/10161220) [[Arxiv]](https://arxiv.org/abs/2207.01009)
+
+This repository contains the official code for the ICRA 2023 paper [L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras](https://ieeexplore.ieee.org/abstract/document/10161220), a calibration process for event cameras and lidar via mutual information maximization.
 
 **Uncalibrated Result**
 
@@ -19,7 +20,7 @@ As neuromorphic technology is maturing, its application to robotics and autonomo
 
 ### Installing Dependencies
 
-We provide two files for installing dependencies. To just run the optimization process, we can install requirements via `pip` . This was tested and collected in Python 3.8.10. 
+We provide two files for installing dependencies. To just run the optimization process, we can install requirements via `pip` . This was tested and collected in Python 3.8.10.
 
 ```bash
 python3 -m venv venv
@@ -38,16 +39,16 @@ conda create --name l2e --file environment.txt
 
 Our sample dataset was built with the following available sensors:
 
-- **RS-LiDAR-M1**  `/rslidar_points`  An automotive-grade MEMS LiDAR that has a 120° HFoV and a 25° VFoV
-- **Prophesee Gen4.1** `/prophesee/camera/cd_events_buffer`  A state-of-the-art event-based camera
+- **RS-LiDAR-M1** `/rslidar_points` An automotive-grade MEMS LiDAR that has a 120° HFoV and a 25° VFoV
+- **Prophesee Gen4.1** `/prophesee/camera/cd_events_buffer` A state-of-the-art event-based camera
 
-The above sensors were run via a ROS interface and their data collected into a rosbag with the associated rostopics. You can run the extraction script with the following command. Flags point to which sensor to extract. 
+The above sensors were run via a ROS interface and their data collected into a rosbag with the associated rostopics. You can run the extraction script with the following command. Flags point to which sensor to extract.
 
 ```bash
 python extract.py {path/to/bag_folder/} {path/to/output_folder} --event --lidar
 ```
 
-The event image reconstruction is performed by accumulating events regardless of polarity to create an accumulated event map. Most triggered events in a static scene are induced by the lidar lasers as the event camera is sensitive to the 905 nm wavelength of light. This script will separate each of the sensor data into the folders `event` and  `lidar` with the same stem name when extracted from the same bag.  
+The event image reconstruction is performed by accumulating events regardless of polarity to create an accumulated event map. Most triggered events in a static scene are induced by the lidar lasers as the event camera is sensitive to the 905 nm wavelength of light. This script will separate each of the sensor data into the folders `event` and `lidar` with the same stem name when extracted from the same bag.
 
 You can use `--help` to get the doc string information regarding the extraction script. use `:q` to exit.
 
@@ -73,24 +74,23 @@ python optimize.py {path/to/images/} {path/to/lidar_scans/} {path/to/output_fold
 
 Additional arguments / parameters include:
 
-- `--bounded` flag for optimizing with bounds on seed values *(default True)*
-- `--disp_bounds` max displacement difference from seed values in m *(default ±0.2 m, from seed)*
-- `--deg_bounds` max rotation difference from seed values in degrees *(default ±5 degrees from seed)*
-- `--optimizer` optimizer to use in *{'nelder-mead', 'Powell', 'L-BFGS-B', 'BFGS', 'CG', 'SLSQP'}*
-- `--image_blur` gaussian blurring std on image to smooth optimization *(default 5px)*
-- `--key` key for the intrinsic calibration in `config.json` *(default cam)*
-- `--axis` flag to use rotation vector over Euler angles *(default True)*
+- `--bounded` flag for optimizing with bounds on seed values _(default True)_
+- `--disp_bounds` max displacement difference from seed values in m _(default ±0.2 m, from seed)_
+- `--deg_bounds` max rotation difference from seed values in degrees _(default ±5 degrees from seed)_
+- `--optimizer` optimizer to use in _{'nelder-mead', 'Powell', 'L-BFGS-B', 'BFGS', 'CG', 'SLSQP'}_
+- `--image_blur` gaussian blurring std on image to smooth optimization _(default 5px)_
+- `--key` key for the intrinsic calibration in `config.json` _(default cam)_
+- `--axis` flag to use rotation vector over Euler angles _(default True)_
 
 You can use `--help` to get the doc string information regarding the optimization script. use `:q` to exit.
 
 ## Citation
 
 ```bibtex
-@inproceedings{kevinta2022:l2e,
+@inproceedings{kevinta2023:l2e,
   title = {L2E: Lasers to Events for 6-DoF Extrinsic Calibration of Lidars and Event Cameras},
   author = {Ta, Kevin and Bruggemann, David and Brödermann, Tim and Sakaridis, Christos and Van Gool, Luc},
   booktitle = {International Conference on Robotics and Automation (ICRA)}
   year = {2023}
 }
 ```
-

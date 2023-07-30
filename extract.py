@@ -1,36 +1,34 @@
+"""Command line tool for extracting a rosbag."""
 import pathlib
 import time
+from pathlib import Path
+from typing import List
 
+import cv2
+import fire
+import numpy as np
 import rosbag
 import sensor_msgs.point_cloud2 as pc2
-
-import numpy as np
-import cv2
-
-import fire
 import tqdm
-
-from cv_bridge import CvBridge
-from pathlib import Path
 
 
 def extract_bag(
-    bag_path: str,
-    output_path: str,
+    bag_dir: str,
+    output_dir: str,
     event: bool = False,
     lidar: bool = False,
 ) -> None:
     """Extract rosbags to single image frames and pointclouds.
-    
+
     Args:
-        bag_path: path to directory containing rosbags for extraction
-        output_path: path to directory where rosbags are extracted to
+        bag_file: path to directory containing rosbags for extraction
+        output_dir: path to directory where rosbags are extracted to
         event: set if event image frame should be extracted
         lidar: set if lidar point cloud should be extracted
     """
 
-    bag_path = Path(bag_path)
-    output_path = Path(output_path)
+    bag_path = Path(bag_dir)
+    output_path = Path(output_dir)
 
     if not bag_path.exists():
         raise FileNotFoundError("Bag directory does not exist!")
@@ -39,7 +37,7 @@ def extract_bag(
         (output_path / "event").mkdir()
         (output_path / "lidar").mkdir()
 
-    bag_files = []
+    bag_files: List[Path] = []
     bag_files += bag_path.glob("*.bag")
 
     start = time.time()
@@ -60,10 +58,13 @@ def extract_bag(
 
 
 def extract_event(
-    bag: rosbag.bag.Bag, output_name: pathlib.Path, event_limit: int = 1e4, clip_count: int = 127,
+    bag: rosbag.bag.Bag,
+    output_name: pathlib.Path,
+    event_limit: int = 10000,
+    clip_count: int = 127,
 ) -> None:
     """Extract single event image from rosbag.
-    
+
     Args:
         bag: rosbag with topics to parse
         output_name: file name to save image as
@@ -76,12 +77,17 @@ def extract_event(
     # generate empty array
     image = np.zeros((720, 1280), dtype=np.uint16)
 
-    total = int(min(int(bag.get_message_count("/prophesee/camera/cd_events_buffer")), event_limit))
+    total = int(
+        min(
+            int(bag.get_message_count("/prophesee/camera/cd_events_buffer")),
+            event_limit,
+        )
+    )
     pbar = tqdm.tqdm(total=total)
 
     # accumulate events up to the limit
     event_batch = 0
-    for topic, msg, t in bag.read_messages(topics=["/prophesee/camera/cd_events_buffer"]):
+    for _, msg, _ in bag.read_messages(topics=["/prophesee/camera/cd_events_buffer"]):
         for event in msg.events:
             image[event.y, event.x] += 1
         event_batch += 1
@@ -97,7 +103,7 @@ def extract_event(
 
 def extract_lidar(bag: rosbag.bag.Bag, output_name: pathlib.Path) -> None:
     """Extract single LiDAR scan from rosbag and filter non-returns.
-    
+
     Args:
         bag: rosbag with topics to parse
         output_name: file name to save point cloud as
@@ -106,7 +112,7 @@ def extract_lidar(bag: rosbag.bag.Bag, output_name: pathlib.Path) -> None:
     msg = None
 
     # read first point cloud
-    for topic, msg, t in bag.read_messages(topics=["/rslidar_points"]):
+    for _, msg, _ in bag.read_messages(topics=["/rslidar_points"]):
         break
 
     if msg:
